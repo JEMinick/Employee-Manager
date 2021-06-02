@@ -230,24 +230,24 @@ const displayAllEmployees = (sGroupByField) => {
     default:
       sGroupByField = "";
       sOrderBy = "employees.id";
-    }
+  }
 
-let sQuery = `SELECT `
-           + `employees.id AS ID, `
-           + `employees.first_name AS "First Name", `
-           + `employees.last_name AS "Last Name", `
-           + `Roles.title AS Title, `
-           + `Departments.name AS Department, `
-           + `Roles.salary AS Salary, `
-           + `MgrInfo.Manager, `
-           + `MgrInfo.MgrTitle, `
-           + `MgrInfo.MgrSalary `
-           + `FROM MgrInfo `
-           + `INNER JOIN ((employees `
-           + `  INNER JOIN Roles ON employees.role_id = Roles.id) `
-           + `  INNER JOIN Departments ON Roles.department_id = Departments.id) `
-           + `ON MgrInfo.MgrID = employees.manager_id `
-           + `ORDER BY ${sOrderBy};`;
+  let sQuery = `SELECT `
+             + `employees.id AS ID, `
+             + `employees.first_name AS "First Name", `
+             + `employees.last_name AS "Last Name", `
+             + `Roles.title AS Title, `
+             + `Departments.name AS Department, `
+             + `Roles.salary AS Salary, `
+             + `MgrInfo.Manager, `
+             + `MgrInfo.MgrTitle, `
+             + `MgrInfo.MgrSalary `
+             + `FROM MgrInfo `
+             + `INNER JOIN ((employees `
+             + `  INNER JOIN Roles ON employees.role_id = Roles.id) `
+             + `  INNER JOIN Departments ON Roles.department_id = Departments.id) `
+             + `ON MgrInfo.MgrID = employees.manager_id `
+             + `ORDER BY ${sOrderBy};`;
 
   // console.log( sQuery );
 
@@ -278,6 +278,11 @@ let sQuery = `SELECT `
 
       let sGroupFieldMatch = "";
       
+      let iLeftMargin=4;
+      var sLeftMargin="";
+      for( var i=0; i < iLeftMargin; i++ )
+        sLeftMargin += " ";
+
       // ForEach record in the query results:
       for( let iRecNo=0; iRecNo < res.length; iRecNo++ ) {
         
@@ -333,11 +338,11 @@ let sQuery = `SELECT `
                     if ( iRecNo === 0 ) {
                       // the first group:
                       sGroupFieldMatch = sRecordFieldInfo1;
-                      sGroupInfo = `\n${sRecordFieldInfo0}: "${sRecordFieldInfo1}"`;
+                      sGroupInfo = `${sRecordFieldInfo0}: "${sRecordFieldInfo1}"`;
                     } else if ( sGroupFieldMatch !== sRecordFieldInfo1 ) {
                       // A group change:
                       sGroupFieldMatch = sRecordFieldInfo1;
-                      sGroupInfo = `\n${sRecordFieldInfo0}: "${sRecordFieldInfo1}"`;
+                      sGroupInfo = `${sRecordFieldInfo0}: "${sRecordFieldInfo1}"`;
                     }
                   }
                 };
@@ -373,17 +378,17 @@ let sQuery = `SELECT `
           bCreateColHdr = false;
           sDisplayRowDelim = createRowDelimiter( sPageColDashes.length );
         }
-        
+
         if ( iRecNo === 0 ) {
-          console.log( sDisplayRowDelim );
-          console.log( sPageColHdr );
-          console.log( sPageColDashes );
+          console.log( `${sLeftMargin}${sDisplayRowDelim}` );
+          console.log( `${sLeftMargin}${sPageColHdr}` );
+          console.log( `${sLeftMargin}${sPageColDashes}` );
         }
 
         aRecInfoData.push( sRecordData );
 
         if ( sGroupInfo.length > 0 ) {
-          console.log( sGroupInfo );
+          console.log( `\n${sLeftMargin}${sGroupInfo}` );
           sGroupInfo="";
         }
         
@@ -401,14 +406,14 @@ let sQuery = `SELECT `
           sDataOutput += ( sFieldData + ( (iColNo < asDisplayColumns.length-1) ? "  " : "") );
           iColNo++;
         });
-        console.log( sDataOutput );
+        console.log( `${sLeftMargin}${sDataOutput}` );
         
         // If I want to add a line of dashes to the display output between each record:
         // console.log( sPageColDashes );
         
       } // endForEach( record )
       
-      console.log( sDisplayRowDelim );
+      console.log( `${sLeftMargin}${sDisplayRowDelim}` );
     }
     displayMainMenu();
   });
@@ -710,7 +715,9 @@ const updateEmployeeRole = () => {
       aEmployeeIDs.push( {id, first_name, last_name, role_id, role_title} );
     });
     
-    inquirer
+    if ( results.length > 0 ) {
+    
+      inquirer
       .prompt([
         {
           name: 'choice',
@@ -815,7 +822,12 @@ const updateEmployeeRole = () => {
         }
 
       });
-
+      
+    }
+    else {
+      displayMainMenu();
+    }
+    
   });
 
   return;
@@ -851,7 +863,9 @@ const updateEmployeeManager = () => {
       aEmployeeInfo.push( {id, first_name, last_name, role_id, roles_title} );
     });
     
-    inquirer
+    if ( results.length > 0 ) {
+    
+      inquirer
       .prompt([
         {
           name: 'choice',
@@ -918,7 +932,8 @@ const updateEmployeeManager = () => {
                       var sName = `${Manager} (${MgrTitle})`;
                       choiceArray.push( sName );
                     });
-                    choiceArray.push( " (none)" );
+                    choiceArray.push( "[No Manager]" );
+                    choiceArray.push( "[Add New Manager]" );
                     return choiceArray;
                   },
                   message: 'Select the new manager for the employee:',
@@ -927,39 +942,53 @@ const updateEmployeeManager = () => {
               .then( (answer) => {
                 var sNewManager = answer.choice;
                 var iNewMgrID = -1;
-                
-                var iStrIdx = sNewManager.indexOf(" (");
-                // remove the role tite:
-                if ( iStrIdx > 0 ) {
-                  var iLen = ( sNewManager.length - iStrIdx - 3 );
-                  if ( iLen > 0 )
-                    sCurrentRole = sNewManager.substr(iStrIdx+2,iLen);
-                    sNewManager = sNewManager.substr(0,iStrIdx);
-                } else {
-                  sNewManager = "";
-                }
-                
-                // Allow the user to un-assign the associated manager:
-                if ( sNewManager.length === 0 )
-                  iNewMgrID = 0;
-                for( var i=0; (iNewMgrID < 0) && (i < aManagerInfo.length); i++ ) {
-                  if ( aManagerInfo[i].Manager === sNewManager )
-                  {
-                    iNewMgrID = aManagerInfo[i].mgrid;
-                  }
-                }
-                if ( iNewMgrID >= 0 )
-                {
-                  if ( bDebugging)
-                    console.log( `updateEmployeeManager(): [${iNewMgrID}: [${sNewManager}]` );
 
-                  sQuery = `UPDATE employees SET employees.manager_id = ${iNewMgrID} WHERE id = ${iEmployeeID};`;
-                  connection.query( sQuery, (err, results) => {
-                    if (err) throw err;
-                    displayMainMenu();
-                  });
-      
-                } // endIf( iNewTitleID > 0 )
+                if ( sNewManager === '[No Manager]' ) {
+                  sNewManager = "";
+                  iNewMgrID = 0;
+                } else if ( sNewManager === '[Add New Manager]' ) {
+                  console.log( "ADD new manager has been requested..." );
+                  sNewManager = "";
+                  addNewEmployee( iEmployeeID );
+                }
+
+                if ( iNewMgrID >= 0 || sNewManager.length > 0 )
+                {
+                  var iStrIdx = sNewManager.indexOf(" (");
+                  // remove the role tite:
+                  if ( iStrIdx > 0 ) {
+                    var iLen = ( sNewManager.length - iStrIdx - 3 );
+                    if ( iLen > 0 )
+                      sCurrentRole = sNewManager.substr(iStrIdx+2,iLen);
+                      sNewManager = sNewManager.substr(0,iStrIdx);
+                  } else {
+                    sNewManager = "";
+                  }
+                  
+                  // Allow the user to un-assign the associated manager:
+                  if ( sNewManager.length === 0 )
+                    iNewMgrID = 0;
+                  
+                  for( var i=0; (iNewMgrID < 0) && (i < aManagerInfo.length); i++ ) {
+                    if ( aManagerInfo[i].Manager === sNewManager )
+                    {
+                      iNewMgrID = aManagerInfo[i].mgrid;
+                    }
+                  }
+                  if ( iNewMgrID >= 0 )
+                  {
+                    if ( bDebugging)
+                      console.log( `updateEmployeeManager(): [${iNewMgrID}: [${sNewManager}]` );
+
+                    sQuery = `UPDATE employees SET employees.manager_id = ${iNewMgrID} WHERE id = ${iEmployeeID};`;
+                    connection.query( sQuery, (err, results) => {
+                      if (err) throw err;
+                    });
+        
+                  } // endIf( iNewTitleID > 0 )
+                  
+                  displayMainMenu();
+                }
                 
               }); // endInquirerPrompt
               
@@ -972,7 +1001,11 @@ const updateEmployeeManager = () => {
         }
 
       });
-
+      
+    } else {
+      displayMainMenu();
+    }
+    
   });
   
   return;
@@ -1006,7 +1039,8 @@ const removeEmployee = () => {
       aEmployeeIDs.push( {id, first_name, last_name, dept_name} );
     });
     
-    inquirer
+    if ( results.length > 0 ) {
+      inquirer
       .prompt([
         {
           name: 'choice',
@@ -1059,15 +1093,17 @@ const removeEmployee = () => {
           console.log( "Unable to DELETE Employee selected: [" + sEmployeeName + "]" );
         }
 
-        displayMainMenu();
       });
+      
+    }
+    displayMainMenu();
 
   });
 
   return;
 }
 
-const addNewEmployee = () => {
+const addNewEmployee = ( iEmployeeID ) => {
   let sRole="";
   let sMgrName="";
   
