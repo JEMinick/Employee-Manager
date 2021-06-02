@@ -598,6 +598,7 @@ function retrieveEmployeeInfo( empInfo ) {
 
 const addEmployeeRecord = ( empInfo ) => {
   var bIsValidData=true;
+  var iNewRecID=0;
 
   if ( bDebugging ) {
     console.log( `====================================================================================` );
@@ -663,15 +664,29 @@ const addEmployeeRecord = ( empInfo ) => {
 
       // console.log( `addEmployeeRecord(): [${sQuery}]` );
       connection.beginTransaction();
-      connection.query( sQuery, (err) => {
+      connection.query( sQuery, (err,res) => {
         if (err) throw err;
         connection.commit();
-        // console.log( `Executed: [${sQuery}]` );
+        iNewRecID = res.insertId;
+
+        // var sChoice="";
+        // inquirer
+        // .prompt({
+        //   name: 'action',
+        //   type: 'list',
+        //   message: `New ID: [${iNewRecID}]`,
+        //   choices: [ 'Yes','No'],
+        // })
+        // .then( (answer) => {
+        //   sChoice = answer.choice;
+        // });
+
+        // console.log(`ADD RECORD New ID: [${iNewRecID}]`);
       });
     }
   }
   
-  return( bIsValidData );
+  return( iNewRecID );
 
 };
 
@@ -838,29 +853,43 @@ const updateEmployeeManager = () => {
   let sNewManager="";
 
   // query the database for all employees:
-  let sQuery = 
-    `SELECT Employees.id, `
-      + `Employees.first_name, `
-      + `Employees.last_name, `
-      + `Employees.manager_id, `
-      + `Employees.role_id, `
-      + `Roles.title AS roles_title `
-      + `FROM (Employees `
-        + `LEFT JOIN MgrInfo ON Employees.id = MgrInfo.mgrid) `
-        + `INNER JOIN Roles ON Employees.role_id = Roles.id `
-      + `WHERE ( ((MgrInfo.Manager) Is Null) ) `
-      + `ORDER BY Employees.last_name, Employees.first_name;`;
+  // let sQuery = 
+  //   `SELECT Employees.id, `
+  //     + `Employees.first_name, `
+  //     + `Employees.last_name, `
+  //     + `Employees.manager_id, `
+  //     + `Employees.role_id, `
+  //     + `Roles.title AS roles_title `
+  //     + `FROM (Employees `
+  //       + `LEFT JOIN MgrInfo ON Employees.id = MgrInfo.mgrid) `
+  //       + `INNER JOIN Roles ON Employees.role_id = Roles.id `
+  //     + `WHERE ( ((MgrInfo.Manager) Is Null) ) `
+  //     + `ORDER BY Employees.last_name, Employees.first_name;`;
 
-    // console.log( sQuery );
+  let sQuery = `SELECT Employees.id, `
+           +   `Employees.first_name, `
+           +   `Employees.last_name, `
+           +   `Employees.manager_id, `
+           +   `Employees.role_id, `
+           +   `Roles.title AS roles_title, `
+           +   `MgrInfo.Manager `
+           + `FROM MgrInfo `
+           + `INNER JOIN (Employees `
+           +   `INNER JOIN Roles ON Employees.role_id = Roles.id) `
+           +   `ON MgrInfo.mgrid = Employees.manager_id `
+           + `ORDER BY Employees.last_name, Employees.first_name;`;
+      
+  if ( bDebugging )
+   console.log( sQuery );
 
-    connection.query( sQuery, (err, results) => {
+  connection.query( sQuery, (err, results) => {
     if (err) throw err;
 
     // Once you have the list of managers, prompt the user to select one:
     
     let aEmployeeInfo = [];
-    results.forEach( ({ id, first_name, last_name, role_id, roles_title }) => {
-      aEmployeeInfo.push( {id, first_name, last_name, role_id, roles_title} );
+    results.forEach( ({ id, first_name, last_name, role_id, roles_title, manager }) => {
+      aEmployeeInfo.push( {id, first_name, last_name, role_id, roles_title, manager} );
     });
     
     if ( results.length > 0 ) {
@@ -886,8 +915,10 @@ const updateEmployeeManager = () => {
         var iEmployeeID=0;
         var iRoleID=0;
         var sCurrentRole="";
+        let sCurrentManager="";
+
+        // remove the role tite that was only displayed for informational purposes:
         var iStrIdx = sEmployeeName.indexOf(" (");
-        // remove the role tite:
         if ( iStrIdx > 0 ) {
           var iLen = ( sEmployeeName.length - iStrIdx - 3 );
           if ( iLen > 0 )
@@ -895,6 +926,7 @@ const updateEmployeeManager = () => {
           sEmployeeName = sEmployeeName.substr(0,iStrIdx);
         }
         
+        // The choice should be "last_name, first_name"
         var aEmployeeElements = sEmployeeName.split(',');
         if ( aEmployeeElements.length === 2 )
         {
@@ -904,6 +936,7 @@ const updateEmployeeManager = () => {
             {
               iEmployeeID = aEmployeeInfo[i].id;
               iRoleID = aEmployeeInfo[i].role_id;
+              sCurrentManager = ( aEmployeeInfo[i].manager ? aEmployeeInfo[i].manager : "" );
             }
           }
           if ( iEmployeeID > 0 ) {
@@ -912,15 +945,34 @@ const updateEmployeeManager = () => {
               console.log( `updateEmployeeManager(): [${iEmployeeID}: ${aEmployeeElements[1].trim()} ${aEmployeeElements[0].trim()}] [${iRoleID}: ${sCurrentRole}]` );
 
             // Create a list of managers to pick from:
-            sQuery  = `SELECT mgrid,Manager,MgrTitle FROM MgrInfo WHERE mgrid > 0 ORDER BY Manager;`;
+            sQuery = `SELECT Employees.id, `
+                  +   `Employees.first_name, `
+                  +   `Employees.last_name, `
+                  +   `Employees.manager_id, `
+                  +   `Employees.role_id, `
+                  +   `Roles.title AS roles_title, `
+                  +   `MgrInfo.Manager `
+                  + `FROM MgrInfo `
+                  + `INNER JOIN (Employees `
+                  +   `INNER JOIN Roles ON Employees.role_id = Roles.id) `
+                  +   `ON MgrInfo.mgrid = Employees.manager_id `
+                  + `WHERE Employees.id <> ${iEmployeeID} `
+                  + `ORDER BY Employees.last_name, Employees.first_name;`;
+ 
             connection.query( sQuery, (err, results) => {
               if (err) throw err;
               
               let aManagerInfo = [];
-              results.forEach( ({ mgrid, Manager, MgrTitle }) => {
-                aManagerInfo.push( {mgrid,Manager,MgrTitle} );
+              // results.forEach( ({ mgrid, Manager, MgrTitle }) => {
+              //   aManagerInfo.push( {mgrid,Manager,MgrTitle} );
+              // });
+              results.forEach( ({ id, first_name, last_name, role_id, roles_title, manager }) => {
+                aManagerInfo.push( {id, first_name, last_name, role_id, roles_title, manager} );
               });
-
+          
+              var sMenuPrompt = `Set the new manager to`
+                                + (sCurrentManager.length > 0 ? ` (currently ${sCurrentManager})` : ``);
+              
               inquirer
               .prompt([
                 {
@@ -928,15 +980,15 @@ const updateEmployeeManager = () => {
                   type: 'rawlist',
                   choices() {
                     const choiceArray = [];
-                    results.forEach( ({ Manager, MgrTitle }) => {
-                      var sName = `${Manager} (${MgrTitle})`;
+                    results.forEach( ({ first_name, last_name, roles_title }) => {
+                      var sName = `${last_name}, ${first_name} (${roles_title})`;
                       choiceArray.push( sName );
                     });
                     choiceArray.push( "[No Manager]" );
                     choiceArray.push( "[Add New Manager]" );
                     return choiceArray;
                   },
-                  message: 'Select the new manager for the employee:',
+                  message: `${sMenuPrompt}:`,
                 },
               ])
               .then( (answer) => {
@@ -949,7 +1001,7 @@ const updateEmployeeManager = () => {
                 } else if ( sNewManager === '[Add New Manager]' ) {
                   console.log( "ADD new manager has been requested..." );
                   sNewManager = "";
-                  addNewEmployee( iEmployeeID );
+                  addNewEmployee( iEmployeeID, 0 );
                 }
 
                 if ( iNewMgrID >= 0 || sNewManager.length > 0 )
@@ -959,7 +1011,7 @@ const updateEmployeeManager = () => {
                   if ( iStrIdx > 0 ) {
                     var iLen = ( sNewManager.length - iStrIdx - 3 );
                     if ( iLen > 0 )
-                      sCurrentRole = sNewManager.substr(iStrIdx+2,iLen);
+                      // sCurrentRole = sNewManager.substr(iStrIdx+2,iLen);
                       sNewManager = sNewManager.substr(0,iStrIdx);
                   } else {
                     sNewManager = "";
@@ -968,13 +1020,28 @@ const updateEmployeeManager = () => {
                   // Allow the user to un-assign the associated manager:
                   if ( sNewManager.length === 0 )
                     iNewMgrID = 0;
-                  
+
+                  var aElements = sNewManager.split(',');
+                  if ( aElements.length === 2 )
+                  {
+                    for( var i=0; i < aManagerInfo.length; i++ ) {
+                      if ( aManagerInfo[i].first_name === aElements[1].trim()
+                            && aManagerInfo[i].last_name === aElements[0].trim()  )
+                      {
+                        iNewMgrID = aManagerInfo[i].id;
+                      }
+                    }
+                    // if ( iNewMgrID > 0 ) {
+                    // }
+                  }
+                                
                   for( var i=0; (iNewMgrID < 0) && (i < aManagerInfo.length); i++ ) {
                     if ( aManagerInfo[i].Manager === sNewManager )
                     {
-                      iNewMgrID = aManagerInfo[i].mgrid;
+                      iNewMgrID = aManagerInfo[i].id;
                     }
                   }
+
                   if ( iNewMgrID >= 0 )
                   {
                     if ( bDebugging)
@@ -1081,29 +1148,34 @@ const removeEmployee = () => {
             }
           }
           if ( iEmployeeID > 0 ) {
-            if ( bDebugging )
-              console.log( `Employee: [${iEmployeeID}: ${aEmployeeElements[1].trim()} ${aEmployeeElements[0].trim()} in ${sDeptName}]` );
+            sQuery = `UPDATE employees SET manager_id = 0 WHERE manager_id = ${iEmployeeID};`;
+            connection.query( sQuery, (err, results) => {
+              if (err) throw err;
+            });
+            // if ( bDebugging )
+              console.log( `DELETE Employee: [${iEmployeeID}: ${aEmployeeElements[1].trim()} ${aEmployeeElements[0].trim()} in ${sDeptName}]` );
             sQuery = `DELETE FROM employees WHERE id = ${iEmployeeID}`;
             connection.query( sQuery, (err, results) => {
               if (err) throw err;
             });
           }
-          
+
         } else {
           console.log( "Unable to DELETE Employee selected: [" + sEmployeeName + "]" );
         }
 
+        displayMainMenu();
+
       });
       
     }
-    displayMainMenu();
 
   });
 
   return;
 }
 
-const addNewEmployee = ( iEmployeeID ) => {
+const addNewEmployee = ( iEmployee2Update, iManagerID ) => {
   let sRole="";
   let sMgrName="";
   
@@ -1153,76 +1225,39 @@ const addNewEmployee = ( iEmployeeID ) => {
         employeeInfo[2].title = sRole;
         // console.log( employeeInfo );
 
-        // query the database for all managers:
-        connection.query( 'SELECT manager, mgrdeptname FROM mgrinfo WHERE mgrid > 0 ORDER BY manager', (err, results) => {
-          if (err) throw err;
-          // Once you have the list of current/valid managers, prompt the user to select a manager:
+        connection.query( 
+          'SELECT roles.id AS roles_id, department_id FROM roles WHERE ?',
+          { title: employeeInfo[2].title }
+          , (err, results) => {
+            if (err) throw err;
+            // for( var i=0; i < results.length; i++ ) {
+            //   console.log( JSON.stringify( results[i] ) );
+            // }
+            results.forEach( ({ roles_id, department_id }) => {
+              // console.log( `Role: [${roles_id}], Department: [${department_id}]` );
+              employeeInfo[4].role_id = roles_id;
+              employeeInfo[5].department_id = department_id;
+            });
+          }
+        );
+
+        if ( iEmployee2Update > 0 && iManagerID === 0 )
+        {
+          // We are adding a new manager for an existing employee...
+
+          employeeInfo[6].manager_id = iManagerID;
+
           inquirer
-            .prompt([
-              {
-                name: 'choice',
-                type: 'rawlist',
-                choices() {
-                  const choiceArray = [];
-                  results.forEach( ({ manager, mgrdeptname }) => {
-                    var sMgrInfo = `${manager} (${mgrdeptname})`;
-                    // console.log( sMgrInfo );
-                    choiceArray.push( sMgrInfo );
-                  });
-                  choiceArray.push( "(none)" );
-                  return choiceArray;
-                },
-                message: 'Select a Manager:',
-              },
-            ])
-            .then( (answer) => {
-              sMgrName = answer.choice;
-              // Remove the department name from the choice:
-              var iIdx = sMgrName.indexOf( " (");
-              if ( iIdx >= 0 ) {
-                sMgrName = sMgrName.substr(0,iIdx);
-              }
-              employeeInfo[3].manager = sMgrName;
-              
-              // var sEmployeeInfo = JSON.stringify( employeeInfo );
-              // console.log( sEmployeeInfo );
-              // var employeeInfo2 = JSON.parse( sEmployeeInfo );
-              // console.log( employeeInfo2 );
-              
-              // sQuery = `SELECT roles.id AS roles_id, department_id FROM roles WHERE title = "${employeeInfo[2].title}"`;
-              // console.log( sQuery );
-              
-              connection.query( 
-                'SELECT roles.id AS roles_id, department_id FROM roles WHERE ?',
-                { title: employeeInfo[2].title }
-                , (err, results) => {
-                  if (err) throw err;
-                  // for( var i=0; i < results.length; i++ ) {
-                  //   console.log( JSON.stringify( results[i] ) );
-                  // }
-                  results.forEach( ({ roles_id, department_id }) => {
-                    // console.log( `Role: [${roles_id}], Department: [${department_id}]` );
-                    employeeInfo[4].role_id = roles_id;
-                    employeeInfo[5].department_id = department_id;
-                  });
-                }
-              );
-              connection.query( 
-                'SELECT mgrid FROM mgrinfo WHERE ?',
-                { Manager: employeeInfo[3].manager }
-                , (err, results) => {
-                  if (err) throw err;
-                  results.forEach( ({ mgrid }) => {
-                    // console.log( `Manager: [${mgrid}]` );
-                    employeeInfo[6].manager_id = mgrid;
-                  });
-                }
-              );
-              
-              // reConnectDB();
-              
+          .prompt({
+            name: 'action',
+            type: 'list',
+            message: 'Are you sure you wish to ADD this manager?',
+            choices: [ 'Yes','No'],
+          })
+          .then( (answer) => {
+            //if ( bDebugging ) {
               let aFieldData = [];
-              let sDatarec = "addNewEmployee(): [";
+              let sDatarec = "addNewManager(): [";
               aFieldData = retrieveEmployeeInfo( employeeInfo );
               if ( aFieldData.length === 7 ) {
                 for( var i=0; i < aFieldData.length; i++ ) {
@@ -1230,64 +1265,156 @@ const addNewEmployee = ( iEmployeeID ) => {
                   sDatarec += (sFieldData + ((i < aFieldData.length-1) ? "," : "" ) );
                 }
                 sDatarec += "]";
-                if ( bDebugging )
-                  console.log( sDatarec );
-                
-                // if ( verifyEmployeeADD(aFieldData[0],aFieldData[1]) )
-                // {
-                //   bAddRecord = true;
-
-                //   // bAdded = addEmployeeRecord( employeeInfo );
-
-                //   // if ( bDebugging )
-                //   //   if ( bAdded ) {
-                //   //     console.log( "Employee was added!" );
-                //   //   } else {
-                //   //     console.log( "The employee could not be added!  Try again..." );
-                //   //   }
-                //   //   displayMainMenu();
-                // }
-                // else {
-                //   displayMainMenu();
-                // }
-
-                // bAdded = addEmployeeRecord( employeeInfo );
-                // if ( bAdded ) {
-                //   console.log( "Employee was added!" );
-                // } else {
-                //   console.log( "The employee could not be added!  Try again..." );
-                // }
-                // displayMainMenu();
+                console.log( sDatarec );
               }
-            
-              inquirer
-              .prompt({
-                name: 'action',
-                type: 'list',
-                message: 'Are you sure you wish to ADD this employeee?',
-                choices: [
-                  'Yes',
-                  'No'
-                ],
-                })
+            //}
+            if ( answer.action === 'Yes' ) {
+              let iMgrID=addEmployeeRecord(employeeInfo);
+              if ( iMgrID === 0 ) {
+                let sQuery1 = `SELECT * FROM employees `
+                            + `WHERE first_name="${employeeInfo[0].first_name}" `
+                            + `AND `
+                            + `last_name="${employeeInfo[1].last_name}";`;
+                // console.log( `LocateEmployeeQ: ${sQuery1}` );
+                // var sChoice="";
+                // inquirer
+                // .prompt({
+                //   name: 'action',
+                //   type: 'list',
+                //   message: 'Are you READY1?',
+                //   choices: [ 'Yes','No'],
+                // })
+                // .then( (answer) => {
+                //   sChoice = answer.choice;
+                  connection.query( sQuery1, (err, results) => {
+                    if (err) throw err;
+                    results.forEach( ({ id, first_name, last_name, manager_id }) => {
+                      iManagerID = manager_id;
+                    });
+                  });
+
+                  let sQuery2 = `UPDATE employees SET manager_id = ${iManagerID} WHERE id = ${iEmployee2Update};`;
+                  // console.log( `UpdateEmployeeQ: ${sQuery2}` );
+
+                  // sChoice="";
+                  // inquirer
+                  // .prompt({
+                  //   name: 'action',
+                  //   type: 'list',
+                  //   message: 'Are you READY2?',
+                  //   choices: [ 'Yes','No'],
+                  // })
+                  // .then( (answer) => {
+                  //   sChoice = answer.choice;
+                    connection.query( sQuery2, (err, results) => {
+                      if (err) throw err;
+                    });
+                  // });
+                    
+                // });
+
+              }
+              if ( iMgrID > 0 ) {
+                // if ( bDebugging )
+                  console.log( `Manager [${iMgrID}] was added!` );
+              } else {
+                // console.log( "The manager could not be added!  Try again..." );
+              }
+            }
+            displayMainMenu();
+          });
+          
+        }
+        else // if ( iEmployee2Update <= 0 || iManagerID <= 0 )
+        {
+          // query the database for all managers:
+          connection.query( 'SELECT manager, mgrdeptname FROM mgrinfo WHERE mgrid > 0 ORDER BY manager', (err, results) => {
+            if (err) throw err;
+            // Once you have the list of current/valid managers, prompt the user to select a manager:
+            inquirer
+              .prompt([
+                {
+                  name: 'choice',
+                  type: 'rawlist',
+                  choices() {
+                    const choiceArray = [];
+                    results.forEach( ({ manager, mgrdeptname }) => {
+                      var sMgrInfo = `${manager} (${mgrdeptname})`;
+                      // console.log( sMgrInfo );
+                      choiceArray.push( sMgrInfo );
+                    });
+                    choiceArray.push( "(none)" );
+                    return choiceArray;
+                  },
+                  message: 'Select a Manager:',
+                },
+              ])
               .then( (answer) => {
-                if ( bEmployeeExists ) {
-                  console.log( `Employee already exists!  Verify your information and try again...` );
+                sMgrName = answer.choice;
+
+                employeeInfo[3].manager = "";
+                if ( sMgrName === '(none)' ) {
+                  sMgrName="";
+                  employeeInfo[6].manager_id = 0;
                 } else {
+                  // Remove the department name from the choice:
+                  var iIdx = sMgrName.indexOf( " (");
+                  if ( iIdx >= 0 ) {
+                    sMgrName = sMgrName.substr(0,iIdx);
+                  }
+                  sMgrName = sMgrName.trim();
+                  employeeInfo[3].manager = sMgrName;
+                  connection.query( 
+                    'SELECT mgrid FROM mgrinfo WHERE ?',
+                    { Manager: employeeInfo[3].manager }
+                    , (err, results) => {
+                      if (err) throw err;
+                      results.forEach( ({ mgrid }) => {
+                        // console.log( `Manager: [${mgrid}]` );
+                        employeeInfo[6].manager_id = mgrid;
+                      });
+                    }
+                  );
+                }
+
+                if ( bDebugging ) {
+                  let aFieldData = [];
+                  let sDatarec = "addNewEmployee(): [";
+                  aFieldData = retrieveEmployeeInfo( employeeInfo );
+                  if ( aFieldData.length === 7 ) {
+                    for( var i=0; i < aFieldData.length; i++ ) {
+                      var sFieldData = aFieldData[i];
+                      sDatarec += (sFieldData + ((i < aFieldData.length-1) ? "," : "" ) );
+                    }
+                    sDatarec += "]";
+                    console.log( sDatarec );
+                  }
+                }
+
+                inquirer
+                .prompt({
+                  name: 'action',
+                  type: 'list',
+                  message: 'Are you sure you wish to ADD this employeee?',
+                  choices: [ 'Yes','No'],
+                })
+                .then( (answer) => {
                   if ( answer.action === 'Yes' ) {
                     if ( addEmployeeRecord( employeeInfo ) ) {
                       if ( bDebugging )
                         console.log( "Employee was added!" );
                     } else {
-                      console.log( "The employee could not be added!  Try again..." );
+                      // console.log( "The employee could not be added!  Try again..." );
                     }
                   }
-                }
-                displayMainMenu();
-              });
-              
-            }); // endThen( Manager )
-        }); // endConnection.query( Manager )
+                  displayMainMenu();
+                });
+  
+              }); // endThen( sMgrName choice )
+
+          }); // endConnection.query( Manager )
+
+        }
 
       }); // endThen( Roles )
   }); // endConnection.query( Roles )
@@ -1295,7 +1422,6 @@ const addNewEmployee = ( iEmployeeID ) => {
   }); // endThen( lastName )
   }); // endThen( firstName )
 
-  return;
 };
 
 const displayMainMenu = () =>
@@ -1349,7 +1475,7 @@ const displayMainMenu = () =>
           break;
         
         case 'Add Employee':
-          addNewEmployee();
+          addNewEmployee(0,0);
           break;
         case 'Remove Employee':
           removeEmployee();
