@@ -1152,7 +1152,7 @@ const removeEmployee = () => {
             connection.query( sQuery, (err, results) => {
               if (err) throw err;
             });
-            // if ( bDebugging )
+            if ( bDebugging )
               console.log( `DELETE Employee: [${iEmployeeID}: ${aEmployeeElements[1].trim()} ${aEmployeeElements[0].trim()} in ${sDeptName}]` );
             sQuery = `DELETE FROM employees WHERE id = ${iEmployeeID}`;
             connection.query( sQuery, (err, results) => {
@@ -1255,7 +1255,7 @@ const addNewEmployee = ( iEmployee2Update, iManagerID ) => {
             choices: [ 'Yes','No'],
           })
           .then( (answer) => {
-            //if ( bDebugging ) {
+            if ( bDebugging ) {
               let aFieldData = [];
               let sDatarec = "addNewManager(): [";
               aFieldData = retrieveEmployeeInfo( employeeInfo );
@@ -1267,7 +1267,7 @@ const addNewEmployee = ( iEmployee2Update, iManagerID ) => {
                 sDatarec += "]";
                 console.log( sDatarec );
               }
-            //}
+            }
             if ( answer.action === 'Yes' ) {
               let iMgrID=addEmployeeRecord(employeeInfo);
               if ( iMgrID === 0 ) {
@@ -1315,7 +1315,7 @@ const addNewEmployee = ( iEmployee2Update, iManagerID ) => {
 
               }
               if ( iMgrID > 0 ) {
-                // if ( bDebugging )
+                if ( bDebugging )
                   console.log( `Manager [${iMgrID}] was added!` );
               } else {
                 // console.log( "The manager could not be added!  Try again..." );
