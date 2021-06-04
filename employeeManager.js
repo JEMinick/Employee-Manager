@@ -180,7 +180,7 @@ const retrieveRecordFieldData = ( sField, sRecord ) =>
 }
 
 const asDisplayColumns   = ['ID','First Name','Last Name','Title','Department','Salary','Manager'];
-const aiDisplayColWidths = [ 2,   12,          12,         20,     15,          6,       20 ];
+const aiDisplayColWidths = [ 2,   12,          12,         22,     18,          6,       20 ];
 
 let sPageColHdr="";
 let sPageColDashes="";
@@ -606,6 +606,7 @@ const addEmployeeRecord = ( empInfo ) => {
   
   let aFieldData = [];
   let sDatarec = "";
+  console.log( JSON.stringify(empInfo) );
   aFieldData = retrieveEmployeeInfo( empInfo );
   for( var iFieldIdx=0; iFieldIdx < aFieldData.length; iFieldIdx++ ) {
     var sFieldData = aFieldData[iFieldIdx];
@@ -648,7 +649,10 @@ const addEmployeeRecord = ( empInfo ) => {
     console.log( `====================================================================================` );
   }
 
-  if ( bIsValidData ) {
+  if ( !bIsValidData ) {
+    console.log( "Invalid data! Try again..." );
+  } else {
+
     // Insert new record:
     if ( !bEmployeeExists )
     {
@@ -661,8 +665,9 @@ const addEmployeeRecord = ( empInfo ) => {
                  + `(first_name,last_name,role_id,manager_id) `
                  + `VALUES `
                  + `("${aDataElements[0]}","${aDataElements[1]}",${aDataElements[4]},${aDataElements[6]});`;
-
-      // console.log( `addEmployeeRecord(): [${sQuery}]` );
+      if ( bDebugging )
+        console.log( `addEmployeeRecord(): [${sQuery}]` );
+      
       connection.beginTransaction();
       connection.query( sQuery, (err,res) => {
         if (err) throw err;
@@ -799,6 +804,7 @@ const updateEmployeeRole = () => {
                     results.forEach( ({ title }) => {
                       choiceArray.push( title );
                     });
+                    choiceArray.push( "[ADD new title]" );
                     return choiceArray;
                   },
                   message: 'Select the new role for the employee:',
@@ -807,24 +813,29 @@ const updateEmployeeRole = () => {
               .then( (answer) => {
                 var sNewTitle = answer.choice;
                 var iNewTitleID = 0;
-                for( var i=0; (iNewTitleID <= 0) && (i < aRolesInfo.length); i++ ) {
-                  if ( aRolesInfo[i].title === sNewTitle )
-                  {
-                    iNewTitleID = aRolesInfo[i].id;
-                  }
+                if ( sNewTitle === '[ADD new title]' ) {
+                  addNewRole();
                 }
-                if ( iNewTitleID > 0 )
-                {
-                  if ( bDebugging)
-                    console.log( `updateEmployeeRole(): [${iNewTitleID}: [${sNewTitle}]` );
+                else {
+                  for( var i=0; (iNewTitleID <= 0) && (i < aRolesInfo.length); i++ ) {
+                    if ( aRolesInfo[i].title === sNewTitle ) {
+                      iNewTitleID = aRolesInfo[i].id;
+                    }
+                  }
+                  if ( iNewTitleID > 0 )
+                  {
+                    if ( bDebugging)
+                      console.log( `updateEmployeeRole(): [${iNewTitleID}: [${sNewTitle}]` );
 
-                  sQuery = `UPDATE employees SET employees.role_id = ${iNewTitleID} WHERE id = ${iEmployeeID};`;
-                  connection.query( sQuery, (err, results) => {
-                    if (err) throw err;
-                    displayMainMenu();
-                  });
-      
-                } // endIf( iNewTitleID > 0 )
+                    sQuery = `UPDATE employees SET employees.role_id = ${iNewTitleID} WHERE id = ${iEmployeeID};`;
+                    connection.query( sQuery, (err, results) => {
+                      if (err) throw err;
+                      // displayMainMenu();
+                    });
+        
+                  } // endIf( iNewTitleID > 0 )
+                  displayMainMenu();
+                }
                 
               }); // endInquirerPrompt
               
@@ -1078,6 +1089,238 @@ const updateEmployeeManager = () => {
   return;
 }
 
+const addDepartmentRecord = ( sNewDeptName ) => {
+  console.log( `ADD Department record for: "${sNewDeptName}"` );
+  displayMainMenu();
+}
+
+const addNewDepartment = () => {
+
+  inquirer
+  .prompt([
+    {
+      type: 'input',
+      name: 'deptName',
+      message: 'Enter the name of the new Department:',
+    }
+  ])
+  .then( (answers) => {
+    var sDeptName = answers.deptName;
+    console.log( `ADDING Department: "${sDeptName}"` );
+
+    let aDeptNames=[];
+    // connection.query( 'SELECT * FROM departments WHERE name = "${sDeptName}"', (err, results) => {
+    connection.query( 'SELECT * FROM departments', (err, results) => {
+      if (err) throw err;
+      results.forEach( ({id, name}) => {
+        aDeptNames.push( {id, name} );
+      });
+
+      if ( aDeptNames.length > 0 ) {
+        var bExists=false;
+        for( var i=0; (!bExists) && (i < aDeptNames.length); i++ ) {
+          if ( aDeptNames[i].name.toLowerCase() === sDeptName.toLowerCase() ) {
+            bExists = true;
+          }
+        }
+        if ( bExists ) {
+          console.log( "That Department already exists!" );
+          displayMainMenu();
+        } else
+          addDepartmentRecord( sDeptName );
+      }
+      else
+        addDepartmentRecord( sDeptName );
+    });
+  });
+
+}
+
+let roleInfo = {
+  role_title : "",
+  salary : 0,
+  dept_id : 0,
+  new_RoleID : 0
+};
+
+const addRoleRecord = ( newRole ) => {
+  var bIsValidData=true;
+  var iNewRecID=0;
+
+  if ( bDebugging ) {
+    console.log( `====================================================================================` );
+  }
+  
+  let sDatarec = "";
+  let FieldData = "";
+
+  if ( bDebugging )
+    console.log( JSON.stringify(roleInfo) );
+
+  var iTotalFields=4;
+  for( var iFieldIdx=0; iFieldIdx < iTotalFields; iFieldIdx++ ) {
+    switch( iFieldIdx ) {
+      case 0: // role_title
+        FieldData = roleInfo.role_title;
+        if ( bIsValidData )
+          bIsValidData = (FieldData.trim().length > 0);
+        break;
+      case 1: // salary
+        FieldData = roleInfo.salary;
+        if ( bIsValidData ) {
+          bIsValidData = (FieldData > 0);
+        }
+        break;
+      case 2: // dept_id
+        FieldData = roleInfo.dept_id;
+        if ( bIsValidData ) {
+          bIsValidData = (FieldData > 0);
+        }
+        break;
+      case 3: // new_RoleID
+        FieldData = roleInfo.new_RoleID;
+        if ( bIsValidData )
+          bIsValidData = !( FieldData != 0 );
+        break;
+    }
+    sDatarec += (FieldData + ((iFieldIdx < iTotalFields-1) ? "|" : "" ) );
+  }
+
+  // sDatarec += "]";
+  if ( bDebugging )
+  {
+    console.log( `addRoleRecord: [${sDatarec}]` );
+  }
+  
+  if ( bDebugging ) {
+    console.log( `====================================================================================` );
+  }
+
+  if ( !bIsValidData ) {
+    console.log( "Invalid data for the new role! Try again..." );
+    displayMainMenu();
+  } else {
+
+    // Insert new record:
+    if ( bDebugging )
+      console.log( "Adding new role..." );
+
+    var aDataElements = sDatarec.split('|');
+    
+    let sQuery = `INSERT INTO roles `
+                + `(title,salary,department_id) `
+                + `VALUES `
+                + `( "${aDataElements[0]}", ${aDataElements[1]}, ${aDataElements[2]} );`;
+    if ( bDebugging )
+      console.log( `addRoleRecord(): [${sQuery}]` );
+    
+    connection.beginTransaction();
+    connection.query( sQuery, (err,res) => {
+      if (err) throw err;
+      connection.commit();
+      iNewRecID = res.insertId;
+
+      // var sChoice="";
+      // inquirer
+      // .prompt({
+      //   name: 'action',
+      //   type: 'list',
+      //   message: `New ID: [${iNewRecID}]`,
+      //   choices: [ 'Yes','No'],
+      // })
+      // .then( (answer) => {
+      //   sChoice = answer.choice;
+      // });
+
+      if ( bDebugging )
+        console.log(`ADD RECORD New ID: [${iNewRecID}]`);
+
+      displayMainMenu();
+
+    });
+  }
+  
+  return( iNewRecID );
+}
+
+const addNewRole = () => {
+
+  console.log( 'In order to define a new Role/Title, enter the new Title, Salary and Department:' );
+
+  inquirer
+  .prompt([
+    {
+      type: 'input',
+      name: 'roleTitle',
+      message: 'Enter a new Title:',
+    },
+    {
+      type: 'input',
+      name: 'roleSalary',
+      message: 'Enter the salary for this new role:'
+    }
+  ])
+  .then( (answers) => {
+    var sRoleTitle = answers.roleTitle;
+    var nRoleSalary = answers.roleSalary;
+    console.log( `ADDING: Roles/Title: ${sRoleTitle} earning ${nRoleSalary}` );
+
+    let aDeptNames=[];
+    connection.query( 'SELECT * FROM departments ORDER BY name', (err, results) => {
+      if (err) throw err;
+      
+      // Once you have the list of current/valid departments, prompt the user to select one:
+      results.forEach( ({id, name}) => {
+        aDeptNames.push( {id, name} );
+      });
+
+      inquirer
+      .prompt([
+        {
+          name: 'choice',
+          type: 'rawlist',
+          message: `Select the department for '${sRoleTitle}':`,
+          choices() {
+            const choiceArray = [];
+            results.forEach( ({ name }) => {
+              choiceArray.push( name );
+            });
+            choiceArray.push( "[ADD new Department]" );
+            return choiceArray;
+          },
+        },
+      ])
+      .then( (answer) => {
+        var iDeptID=0;
+        var sDeptName = answer.choice;
+
+        if ( sDeptName === "[ADD new Department]" ) {
+          addNewDepartment();
+        } else {
+          for( var i=0; (i < aDeptNames.length) && (iDeptID === 0); i++ ) {
+            if ( aDeptNames[i].name === sDeptName ) {
+              iDeptID = aDeptNames[i].id;
+            }
+          }
+          if ( bDebugging )
+            console.log( `[Defining NEW role]: Title:"${sRoleTitle}" in Dept: [${iDeptID}]"${sDeptName}"` );
+            
+          roleInfo.role_title = sRoleTitle;
+          roleInfo.salary = nRoleSalary;
+          roleInfo.dept_id = iDeptID;
+          roleInfo.new_RoleID = 0;
+          addRoleRecord( roleInfo );
+        }
+
+        // displayMainMenu();
+      });
+    });
+
+    // displayMainMenu();
+  });
+
+}
+
 const removeEmployee = () => {
   let sEmployeeName="";
   
@@ -1180,43 +1423,51 @@ const addNewEmployee = ( iEmployee2Update, iManagerID ) => {
   let sMgrName="";
   
   // bEmployeeExists = false;
+  employeeInfo[0].first_name = "";
+  employeeInfo[1].last_name = "";
 
   inquirer
-  .prompt({
-    name: 'firstName',
-    type: 'input',
-    message: 'What is the employees first name:',
-  })
-  .then( (answer) => {
-  employeeInfo[0].first_name = answer.firstName.trim();
-  
-  inquirer
-  .prompt({
-    name: 'lastName',
-    type: 'input',
-    message: 'What is the employees last:',
-  })
-  .then( (answer) => {
+  .prompt([
+    {
+      type: 'input',
+      name: 'firstName',
+      message: 'What is the employees first name:',
+    },
+    {
+      type: 'input',
+      name: 'lastName',
+      message: 'What is the employees last name:',
+    },
+  ])
+  .then( (answers) => {
 
-    employeeInfo[1].last_name = answer.lastName.trim();
+    employeeInfo[0].first_name = answers.firstName.trim();
+    employeeInfo[1].last_name  = answers.lastName.trim();
 
-  // query the database for all roles:
-  connection.query( 'SELECT * FROM roles ORDER BY title', (err, results) => {
-    if (err) throw err;
-    // Once you have the list of current/valid titles, prompt the user to select one:
-    inquirer
+    // query the database for all roles:
+    let aRolesInfo=[];
+
+    connection.query( 'SELECT * FROM roles ORDER BY title', (err, results) => {
+      if (err) throw err;
+      // Once you have the list of current/valid titles, prompt the user to select one:
+      results.forEach( ({id, title, department_id}) => {
+        aRolesInfo.push( {id, title, department_id} );
+      });
+
+      inquirer
       .prompt([
         {
           name: 'choice',
           type: 'rawlist',
+          message: 'Select the employee Title:',
           choices() {
             const choiceArray = [];
             results.forEach( ({ title }) => {
               choiceArray.push( title );
             });
+            choiceArray.push( "[ADD new title]" );
             return choiceArray;
           },
-          message: 'Select the employee Title:',
         },
       ])
       .then( (answer) => {
@@ -1225,21 +1476,35 @@ const addNewEmployee = ( iEmployee2Update, iManagerID ) => {
         employeeInfo[2].title = sRole;
         // console.log( employeeInfo );
 
-        connection.query( 
-          'SELECT roles.id AS roles_id, department_id FROM roles WHERE ?',
-          { title: employeeInfo[2].title }
-          , (err, results) => {
-            if (err) throw err;
-            // for( var i=0; i < results.length; i++ ) {
-            //   console.log( JSON.stringify( results[i] ) );
-            // }
-            results.forEach( ({ roles_id, department_id }) => {
-              // console.log( `Role: [${roles_id}], Department: [${department_id}]` );
-              employeeInfo[4].role_id = roles_id;
-              employeeInfo[5].department_id = department_id;
-            });
+        if ( sRole === '[ADD new title]' ) {
+          addNewRole();
+        }
+        else {
+
+        employeeInfo[4].role_id = 0;
+        employeeInfo[5].department_id = 0;
+        for( var i=0; (i < aRolesInfo.length) && (employeeInfo[4].role_id === 0); i++ ) {
+          if ( aRolesInfo[i].title === sRole ) {
+            employeeInfo[4].role_id = aRolesInfo[i].id;
+            employeeInfo[5].department_id = aRolesInfo[i].department_id;
           }
-        );
+        }
+
+        // connection.query( 
+        //   'SELECT roles.id AS roles_id, department_id FROM roles WHERE ?',
+        //   { title: employeeInfo[2].title }
+        //   , (err, results) => {
+        //     if (err) throw err;
+        //     // for( var i=0; i < results.length; i++ ) {
+        //     //   console.log( JSON.stringify( results[i] ) );
+        //     // }
+        //     results.forEach( ({ roles_id, department_id }) => {
+        //       // console.log( `Role: [${roles_id}], Department: [${department_id}]` );
+        //       employeeInfo[4].role_id = roles_id;
+        //       employeeInfo[5].department_id = department_id;
+        //     });
+        //   }
+        // );
 
         if ( iEmployee2Update > 0 && iManagerID === 0 )
         {
@@ -1269,6 +1534,7 @@ const addNewEmployee = ( iEmployee2Update, iManagerID ) => {
               }
             }
             if ( answer.action === 'Yes' ) {
+              console.log( employeeInfo );
               let iMgrID=addEmployeeRecord(employeeInfo);
               if ( iMgrID === 0 ) {
                 let sQuery1 = `SELECT * FROM employees `
@@ -1414,13 +1680,16 @@ const addNewEmployee = ( iEmployee2Update, iManagerID ) => {
 
           }); // endConnection.query( Manager )
 
+        } // endIfElse( iEmployee2Update > 0 && iManagerID === 0 )
         }
+        //displayMainMenu();
 
       }); // endThen( Roles )
-  }); // endConnection.query( Roles )
+
+    }); // endConnection.query( Roles )
 
   }); // endThen( lastName )
-  }); // endThen( firstName )
+  // }); // endThen( firstName )
 
 };
 
